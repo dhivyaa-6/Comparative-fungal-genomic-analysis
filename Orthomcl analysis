@@ -1,7 +1,7 @@
 ----INSTALLATION OVERVIEW---------------------------
 
 I.      General Requirements
-II.	    Installing from General Linux/Unix Binary Packages
+II.	Installing from General Linux/Unix Binary Packages
 III.	Creating a Database and User Account
 IV.     Installing Required PERL modules for MySQL
 V.      Configuration of the database
