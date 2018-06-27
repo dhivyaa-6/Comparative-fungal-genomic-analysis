@@ -1,0 +1,229 @@
+----INSTALLATION OVERVIEW---------------------------
+
+I.      General Requirements
+II.	    Installing from General Linux/Unix Binary Packages
+III.	Creating a Database and User Account
+IV.     Installing Required PERL modules for MySQL
+V.      Configuration of the database
+VI.     Orthomcl pipeline
+VII.    MCL
+
+---------General Requirements
+# First download the files and unzip them... 
+# keep in mind that these may be out of date, so please check the correct versions and adjust accordingly.
+# Also, PATH_TO_PROGRAMS, will be your path to where you want to install everything
+cd PATH_TO_PROGRAMS
+wget http://dev.mysql.com/get/Downloads/MySQL-5.6/mysql-5.6.21-linux-glibc2.5-x86_64.tar.gz
+wget http://www.orthomcl.org/common/downloads/software/v2.0/orthomclSoftware-v2.0.9.tar.gz
+wget http://www.micans.org/mcl/src/mcl-latest.tar.gz
+tar -zxvf mysql-5.6.21-linux-glibc2.5-x86_64.tar.gz
+tar -zxvf orthomclSoftware-v2.0.9.tar.gz
+tar -zxvf mcl-latest.tar.gz
+
+-----------------Installing from General Linux/Unix Binary Packages
+## Change to the mysql directory and configure mysql using the sample config file provided in orthomcl download:
+
+               cd mysql
+               cp my_orthomcl_dir/doc/OrthoMCLEngine/Main/mysql.cnf .
+
+               vi mysql.cnf			   
+			   
+
+       set basedir= to the full path of your new mysql directory
+
+       set datadir= to the full path of the /data subdir in your new mysql directory
+           - this is the directory that will hold all the data.
+           - use the df -h command to see how much space you have
+           - you will need at least 5x the size of the file made by orthomclBlastParser
+           
+
+       It is recommended not to change the rest of the settings unless you really know what you are doing
+
+## Set up the default MySQL databases:
+
+	        
+                ./scripts/mysql_install_db --defaults-file=mysql.cnf 
+    
+        NOTE: The script will inform that you that need to set a root password. Do not worry about this for now; you will perform this task in another step.
+
+
+## You are now ready to start your MySQL server as a background process. To do so, from within your mysql directory, run:
+
+           ./bin/mysqld_safe --defaults-file=mysql.cnf &
+        
+         NOTE: You *must* run this command from the mysql directory. You should see something similar to the following:
+
+ 		[1] 67786% Starting mysqld daemon with databases from home/youraccountname/mysql/data
+
+## At this point your MySQL password is still blank. Use the following command to set a new        
+      root password:
+
+		./bin/mysqladmin --defaults-file=mysql.cnf -u root password "yourpasswordhere"
+
+      NOTE: DO NOT FORGET THIS PASSWORD.  
+	  
+## Everytime you want to start mysql please do the following. You need not rerun the above steps
+
+       ./scripts/mysql_install_db --defaults-file=mysql.cnf
+	   ./bin/mysql --defaults-file=mysql.cnf -u root -p
+(enter password when the prompt appears)
+
+-----------------Create a New Database and User Account
+Log in to your mysql server as root. If you are logging in to an existing MySQL server, use any existing account that can create a user and grant privileges: 
+
+		./scripts/mysql_install_db --defaults-file=mysql.cnf
+	    ./bin/mysql --defaults-file=mysql.cnf -u root -p
+
+      Enter the root password you set when prompted.
+
+     Once logged in as root, create the database and user (schema) that you will use for OrthoMCL
+      (we use orthomcl as an example here), and grant the user account the necessary privileges:
+ 
+          mysql> CREATE DATABASE orthomcl;
+	
+	      mysql> GRANT ALL PRIVILEGES ON orthomcl.* TO 'orthomcl'@'localhost';
+	
+ 	      mysql> set password for orthomcl@localhost = password("athens");
+
+      NOTE: DO NOT FORGET THIS PASSWORD.  write it down someplace that you won't forget
+
+      NOTE: if you want to play with the data in the database, you can get into it like this:
+      ./bin/mysql --defaults-file=mysql.cnf -u orthomcl
+
+-----------------Installing the Required PERL Modules for MySQL 
+
+	Check to see if the DBI and DBD::mysql PERL modules are installed:
+
+          $ perl -MDBI -e 1
+          $ perl -MDBD::mysql -e 1
+
+      - If you receive no output, then the module *is* installed and you
+        can continue to section V. However, if you receive an error message for
+        either, continue to the next step  and install the missing module(s).
+
+      - It is often the case that the DBI module is installed, but DBD:mysql is not.
+
+
+      If you have root access, the easiest way to install Perl modules on Unix/Linux is to perform a system-wide install using CPAN:
+
+          $ perl -MCPAN -e shell
+          cpan> o conf makepl_arg "mysql_config=/path_to_your_mysql_dir/bin/mysql_config"
+          cpan> install Data::Dumper
+          cpan> install DBI
+          cpan> force install DBD::mysql  
+	  
+	  
+-----------------Configuration of the database 
+## this config assumes a mysql database named 'orthomcl'.  adjust according to your situation.
+## In your mysql directory create a file called mysql.config
+         cat >mysql.config
+         dbVendor=mysql 
+         dbConnectString=dbi:mysql:orthomcl:mysql_local_infile=1:localhost:3307;mysql_read_default_file=/home/rdhivyaa/softwares/mysql-5.6.21-linux-glibc2.5-x86_64/mysql.cnf
+         dbLogin=orthomcl
+         dbPassword=athens
+         similarSequencesTable=SimilarSequences
+         orthologTable=Ortholog
+         inParalogTable=InParalog
+         coOrthologTable=CoOrtholog
+         interTaxonMatchView=InterTaxonMatch
+         percentMatchCutoff=50
+         evalueExponentCutoff=-5
+         oracleIndexTblSpc=NONE	  
+		 (CTRL+D)
+		 
+-----------------Orthomcl pipeline
+## Getting the data
+        mkdir original #store all your fasta files in here
+
+        mkdir complaintFasta # new directory for processed files
+
+## Cleaning sequences
+We will use ‘orthomclAdjustFasta’ to clean our sequences. In the following commands
+
+        orthomclAdjustFasta Pege Pegenula_proteins.fasta 1
+
+The first option (eg., Pege is used as taxonomic identifier,second option (eg. Pegenula_proteins.fasta) as the input file name and last option (eg.1) as the field to be used as sequence identifier from the input file. 
+Repeat this for all the fasta files.
+
+## Filtering step
+Since the predicted proteins will have proteins of all sizes, we need to perform a filtering step where we remove all proteins that are shorter than a specific length, so that they won’t interfere with the 
+OrthoMCL analyses.
+
+       orthomclFilterFasta complaintFasta 10 20 
+	   
+Here, 10 is the minimum length for protein to keep and 20 is the maximum allowed stop codons in the sequences. This command will generate 2 files:goodProteins.fasta, containing all proteins that passed the filtering and 
+poorProteins.fasta, containing all rejects.
+
+## all vs. all BLAST
+The next step is to perform all vs. all BLAST. This step will be performed using the NCBI -BLAST program with goodProteins.fasta as the BLAST database and as query sequences. 
+First, prepare the BLAST database:
+
+        makeblastdb -in goodProteins.fasta -dbtype prot -parse_seqids -out goodProteins.fasta
+
+Options -dbtype will specify the input sequences as proteins,-parse_seqids will allow extracting the sequences from the database and -out specifies the blast database name.
+This will create a database with 4 additional files.
+
+Then perform BLAST
+ 
+        blastp -db goodProteins.fasta -query goodProteins.fasta -outfmt 6 -out blastresults.tsv 
+
+
+	  
+## Parse BLAST results
+Next we will use orthomclBlastParser program to convert the tab delimited BLAST results into a format ready for loading into the OrthoMCLschema in the relational database.
+
+        orthomclBlastParser blastresults.tsv ./complaintFasta/ >> SimilarSequences.txt
+		
+## Upload data into the database 
+To specify the structure for the orthomcl database that we just created, we will use the following command:
+ 
+       orthomclInstallSchema mysql.config mysql.log ###mysql.config is the configuration file we created in the previous step. 
+	   orthomclLoadBlast mysql.config SimilarSequences.txt (computationally intensive step if you are workign with more than 10 fasta files)
+	   
+ You can parallelize this step by 
+	   
+ Example:
+ 
+       srun --time=99:00:00 -p serial --exclude=c10-39 --mem 20000 -n 16 orthomclLoadBlast mysql.config /home/rdhivyaa/comparative_genome_analysis_080116/genome_download_080116/pos_selection_080516/seven_genomes_outgroup/similarSequences.txt
+ 
+## Getting results 	  
+
+Once uploaded we can call pairs (potential orthologs, co-orthologs and in -paralogs). 
+
+       orthomclPairs mysql.config pairs.log cleanup=no
+	  
+Example:	  
+	   
+	   srun --time=99:00:00 -p serial --mem 20000 -n 16 orthomclPairs mysql.config orthomclPairs.log cleanup=yes
+
+	   
+This is a computationally intensive step that finds protein pairs looking in to the BLAST results that was uploaded.  This program executes a series of 20 internal steps, each creating an intermediate database 
+table or index. Finally, it populates the three output tables: Orthologs, InParalogs and CoOrthologs. cleanup=no, will make sure that all intermediary tables in the database are kept so that, if one of those steps fails, you can restart from the step it failed. You can also use options such as 
+yes (not to keep intermediate tables), only (drops table if all steps are successful), all (retains only final 3 tables).
+
+
+To get the results back from the database made by orthomclPairs, orthomclDumpPairsFiles command can be used.
+
+       orthomclDumpPairsFiles mysql.config
+	   
+Example:	  
+	   
+	   srun --time=12:00:00 -p serial --mem 24000 -n 16 orthomclDumpPairsFiles mysql.config
+	   
+The output will be a directory (called pairs) and a file (called mclinput). The pairs directory, will contain three files: orthologs.txt, coorthologs.txt, inparalogs.txt. Each of these files describes 
+pair-wise relationships between proteins. They have three columns: Protein 1, Protein2 and normalized similarity scorebetween them. The mclinput file contains the identical information as the three 
+files in pairs directory but merged as a single file and in a format accepted by the mcl program. 
+
+## MCL pipeline
+
+MCL program will be used to cluster the pairs extracted in the previous steps to determine ortholog groups.
+
+       mcl mclInput --abc -I 1.5 -o groups_1.5.txt
+	   
+Here, --abc refers to the input format (tab delimited, 3 fields format), -I refers to inflation value and -o refers to output file name. Inflation value will determine how tight the clusters will be. It can range from 1 
+to 6, but most publications use values between 1.2 -1.5 for detecting orthologous groups. The final step is to name the groups called by mcl program. 
+
+      orthomclMclToGroups OG1.5 _ 1000 < groups_1.5.txt > named_groups_1.5.txt 
+	  
+Here, OG1.5_is the prefix we use to name the ortholog group, 1000 is the starting number for the ortholog group and last 2 fields are input and output file name respectively.
+	  
